@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 from models.user import User
+from models.meal import Meal
 from database import db
+from datetime import datetime
 from flask_login import LoginManager, login_user, current_user, logout_user, login_required
 import bcrypt
 
@@ -86,13 +88,13 @@ def read_user(id_user):
     
     return jsonify({"message": "User not found"}), 404
 
-@app.route('/user/<int:id_user>', methods=["PUT"])
+@app.route("/user/<int:id_user>", methods=["PUT"])
 @login_required
 def update_user(id_user):
   data = request.json
   user = User.query.get(id_user)
 
-  if id_user != current_user.id and current_user.role == "user":
+  if id_user != current_user.id and current_user.role != "admin":
     return jsonify({"message": "Operation not permitted"}), 403
 
   if user and data.get("password"):
@@ -104,7 +106,7 @@ def update_user(id_user):
   
   return jsonify({"message": "User not found"}), 404
 
-@app.route('/user/<int:id_user>', methods=["DELETE"])
+@app.route("/user/<int:id_user>", methods=["DELETE"])
 @login_required
 def delete_user(id_user):
   user = User.query.get(id_user)
@@ -121,6 +123,37 @@ def delete_user(id_user):
     return jsonify({"message": f"User {id_user} deleted successfully"})
   
   return jsonify({"message": "User not found"}), 404
+
+@app.route("/meals", methods=["POST"])
+@login_required
+def create_meal():
+    data = request.json
+    name = data.get("name")
+    description = data.get("description")
+    date_time = data.get("date_time")
+    in_diet = data.get("in_diet")
+
+    if date_time:
+        try:
+            date_time = datetime.fromisoformat(date_time)
+        except ValueError:
+            return jsonify({"message": "Invalid date_time format"}), 400
+    else:
+        date_time = datetime.utcnow()
+
+    if name and isinstance(in_diet, bool):
+        meal = Meal(
+            name=name,
+            description=description,
+            date_time=date_time,
+            in_diet=in_diet,
+            user_id=current_user.id
+        )
+        db.session.add(meal)
+        db.session.commit()
+        return jsonify({"message": "Meal created successfully", "meal": meal.id})
+
+    return jsonify({"message": "Invalid data"}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
