@@ -8,7 +8,7 @@ import bcrypt
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "your_secret_key"
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:\\Users\\Carlos\\Desktop\\portfolio\\api-diet\\api-diet\\instance\\database.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://ceborba:admin123@localhost:3306/flask-crud'
 
 login_manager = LoginManager()
 db.init_app(app)
@@ -154,6 +154,96 @@ def create_meal():
         return jsonify({"message": "Meal created successfully", "meal": meal.id})
 
     return jsonify({"message": "Invalid data"}), 400
+
+@app.route("/meals/<int:id>", methods=["PUT"])
+@login_required
+def update_meal(id):
+    data = request.json
+    meal = Meal.query.get(id)
+
+    if not meal:
+        return jsonify({"message": "Meal not found"}), 404
+
+    name = data.get("name")
+    description = data.get("description")
+    date_time = data.get("date_time")
+    in_diet = data.get("in_diet")
+
+    if name:
+        meal.name = name
+
+    if description:
+        meal.description = description
+
+    if date_time:
+        try:
+            meal.date_time = datetime.fromisoformat(date_time)
+        except ValueError:
+            return jsonify({"message": "Invalid date_time format"}), 400
+
+    if isinstance(in_diet, bool):
+        meal.in_diet = in_diet
+
+    db.session.commit()
+    return jsonify({"message": f"Meal updated successfully", "meal": meal.id})
+
+@app.route("/meals/<int:id>", methods=["DELETE"])
+@login_required
+def delete_meal(id):
+    meal = Meal.query.get(id)
+
+    if meal.user_id != current_user.id:
+        return jsonify({"message": "You don't have permission to delete this meal"}), 403
+    
+    if meal:
+        db.session.delete(meal)
+        db.session.commit()
+        return jsonify({"message": "Meal deleted successfully"})
+    
+    return jsonify({"message": "Meal not found"}), 404
+
+@app.route("/meals", methods=["GET"])
+@login_required
+def list_meals():
+    meals = Meal.query.filter_by(user_id=current_user.id).all()
+
+    if not meals:
+        return jsonify({"message": "No meals found"}), 404
+    
+    meals_list = [
+        {
+            "id": meal.id,
+            "name": meal.name,
+            "description": meal.description,
+            "date_time": meal.date_time.isoformat() if meal.date_time else None,
+            "in_diet": meal.in_diet
+        }
+        for meal in meals
+    ]
+
+    return jsonify({"meals": meals_list})
+  
+@app.route("/meals/<int:id>", methods=["GET"])
+@login_required
+def get_meal(id):
+    meal = Meal.query.get(id)
+
+    if not meal:
+        return ({"message": "Meal not found"}), 404
+    
+    if meal.user_id != current_user.id:
+        return jsonify({"message": "You don't have permission to view this meal"}), 403
+    
+    meal_data = {
+        "id": meal.id,
+        "name": meal.name,
+        "description": meal.description,
+        "date_time": meal.date_time,
+        "in_diet": meal.in_diet
+    }
+
+    return jsonify({"message": meal_data})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
